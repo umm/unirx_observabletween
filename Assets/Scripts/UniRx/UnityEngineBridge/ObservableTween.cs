@@ -101,25 +101,26 @@ namespace UniRx {
             { typeof(Vector3), typeof(OperatableVector3) },
         };
 
-        public static IObservable<T> Tween<T>(T start, T finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
-            return Tween(() => start, () => finish, () => duration, easeType, loopType);
+        public static IObservable<T> Tween<T>(T start, T finish, float duration, EaseType easeType, LoopType loopType = LoopType.None, Action onCompleteTween = null) where T : struct {
+            return Tween(() => start, () => finish, () => duration, easeType, loopType, onCompleteTween);
         }
 
-        public static IObservable<T> Tween<T>(T start, T finish, Func<float> duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
-            return Tween(() => start, () => finish, duration, easeType, loopType);
+        public static IObservable<T> Tween<T>(T start, T finish, Func<float> duration, EaseType easeType, LoopType loopType = LoopType.None, Action onCompleteTween = null) where T : struct {
+            return Tween(() => start, () => finish, duration, easeType, loopType, onCompleteTween);
         }
 
-        public static IObservable<T> Tween<T>(Func<T> start, Func<T> finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
-            return Tween(start, finish, () => duration, easeType, loopType);
+        public static IObservable<T> Tween<T>(Func<T> start, Func<T> finish, float duration, EaseType easeType, LoopType loopType = LoopType.None, Action onCompleteTween = null) where T : struct {
+            return Tween(start, finish, () => duration, easeType, loopType, onCompleteTween);
         }
 
-        public static IObservable<T> Tween<T>(Func<T> start, Func<T> finish, Func<float> duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
+        public static IObservable<T> Tween<T>(Func<T> start, Func<T> finish, Func<float> duration, EaseType easeType, LoopType loopType = LoopType.None, Action onCompleteTween = null) where T : struct {
             return Tween(
                 () => Activator.CreateInstance(OPERATABLE_STRUCT_MAP[typeof(T)], start()) as OperatableBase<T>,
                 () => Activator.CreateInstance(OPERATABLE_STRUCT_MAP[typeof(T)], finish()) as OperatableBase<T>,
                 duration,
                 easeType,
-                loopType
+                loopType,
+                onCompleteTween
             );
         }
 
@@ -150,9 +151,10 @@ namespace UniRx {
 
         }
 
-        private static IObservable<T> Tween<T>(Func<OperatableBase<T>> start, Func<OperatableBase<T>> finish, Func<float> duration, EaseType easeType, LoopType loopType) where T : struct {
+        private static IObservable<T> Tween<T>(Func<OperatableBase<T>> start, Func<OperatableBase<T>> finish, Func<float> duration, EaseType easeType, LoopType loopType, Action onCompleteTween) where T : struct {
             T startValue = default(T);
             T finishValue = default(T);
+            onCompleteTween = onCompleteTween ?? (() => {});
             Func<IObserver<T>, IDisposable> returnStartValue = (observer) => {
                 observer.OnNext(startValue);
                 return null;
@@ -171,7 +173,8 @@ namespace UniRx {
                 // 実際の Easing 処理実行
                 .Select(information => Easing(information.Time, information.Start, (information.Finish - information.Start), information.Duration, information.EaseType).Value)
                 // 最終フレームの値を確実に流すために OnCompleted が来たら値を一つ流すストリームに繋ぐ
-                .Concat(Observable.Create(returnFinishValue).Take(1));
+                // 1回分の Tween が終わったらコールバックを呼ぶ
+                .Concat(Observable.Create(returnFinishValue).Take(1).Do(_ => onCompleteTween()));
             switch (loopType) {
                 case LoopType.None:
                     // Do nothing.
@@ -192,7 +195,8 @@ namespace UniRx {
                                 // start と finish を入れ替えて、実際の Easing 処理実行
                                 .Select(information => Easing(information.Time, information.Finish, (information.Start - information.Finish), information.Duration, information.EaseType).Value)
                                 // 最終フレームの値を確実に流すために OnCompleted が来たら最終値を一つ流すストリームに繋ぐ
-                                .Concat(Observable.Create(returnStartValue).Take(1))
+                                // 1回分の Tween が終わったらコールバックを呼ぶ
+                                .Concat(Observable.Create(returnStartValue).Take(1).Do(_ => onCompleteTween()))
                         )
                         .Repeat();
                     break;
@@ -209,7 +213,9 @@ namespace UniRx {
                                 // start と finish を入れ替えて、実際の Easing 処理実行
                                 .Select(information => Easing(information.Time, information.Finish, (information.Start - information.Finish), information.Duration, MIRROR_EASE_TYPE_MAP[information.EaseType]).Value)
                                 // 最終フレームの値を確実に流すために OnCompleted が来たら最終値を一つ流すストリームに繋ぐ
-                                .Concat(Observable.Create(returnStartValue).Take(1))
+                                // 1回分の Tween が終わったらコールバックを呼ぶ
+                                .Concat(Observable.Create(returnStartValue).Take(1).Do(_ => onCompleteTween()))
+
                         )
                         .Repeat();
                     break;
