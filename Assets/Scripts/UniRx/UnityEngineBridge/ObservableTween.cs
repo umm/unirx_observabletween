@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace UniRx {
@@ -93,34 +94,76 @@ namespace UniRx {
             { EaseType.InOutElastic, EaseType.InOutElastic },
         };
 
-        public static IObservable<int> Tween(int start, int finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) {
-            return Tween(new OperatableInt(start), new OperatableInt(finish), duration, easeType, loopType);
+        private static readonly Dictionary<Type, Type> OPERATABLE_STRUCT_MAP = new Dictionary<Type, Type>() {
+            { typeof(int), typeof(OperatableInt) },
+            { typeof(float), typeof(OperatableFloat) },
+            { typeof(Vector2), typeof(OperatableVector2) },
+            { typeof(Vector3), typeof(OperatableVector3) },
+        };
+
+        public static IObservable<T> Tween<T>(T start, T finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
+            return Tween(() => start, () => finish, duration, easeType, loopType);
         }
 
-        public static IObservable<float> Tween(float start, float finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) {
-            return Tween(new OperatableFloat(start), new OperatableFloat(finish), duration, easeType, loopType);
+        public static IObservable<T> Tween<T>(Func<T> start, Func<T> finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
+            return Tween(
+                () => Activator.CreateInstance(OPERATABLE_STRUCT_MAP[typeof(T)], start()) as OperatableBase<T>,
+                () => Activator.CreateInstance(OPERATABLE_STRUCT_MAP[typeof(T)], finish()) as OperatableBase<T>,
+                duration,
+                easeType,
+                loopType
+            );
         }
 
-        public static IObservable<Vector2> Tween(Vector2 start, Vector2 finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) {
-            return Tween(new OperatableVector2(start), new OperatableVector2(finish), duration, easeType, loopType);
+        private struct TweenInformation<T> where T : struct {
+
+            public float Time { get; set; }
+
+            public float StartTime { get; }
+
+            public OperatableBase<T> Start { get; }
+
+            public OperatableBase<T> Finish { get; }
+
+            public float Duration { get; }
+
+            public EaseType EaseType { get; }
+
+            public TweenInformation(float startTime, OperatableBase<T> start, OperatableBase<T> finish, float duration, EaseType easeType, out T startValue, out T finishValue) {
+                this.Time = startTime;
+                this.StartTime = startTime;
+                this.Start = start;
+                this.Finish = finish;
+                this.Duration = duration;
+                this.EaseType = easeType;
+                startValue = start.Value;
+                finishValue = finish.Value;
+            }
+
         }
 
-        public static IObservable<Vector3> Tween(Vector3 start, Vector3 finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) {
-            return Tween(new OperatableVector3(start), new OperatableVector3(finish), duration, easeType, loopType);
-        }
-
-        private static IObservable<T> Tween<T>(OperatableBase<T> start, OperatableBase<T> finish, float duration, EaseType easeType, LoopType loopType) where T : struct {
-            IObservable<T> stream = Observable.Empty<float>()
-                // Repeat() のために、毎回初期時刻を生成
-                .StartWith(() => Time.time)
+        private static IObservable<T> Tween<T>(Func<OperatableBase<T>> start, Func<OperatableBase<T>> finish, float duration, EaseType easeType, LoopType loopType) where T : struct {
+            T startValue = default(T);
+            T finishValue = default(T);
+            Func<IObserver<T>, IDisposable> returnStartValue = (observer) => {
+                observer.OnNext(startValue);
+                return null;
+            };
+            Func<IObserver<T>, IDisposable> returnFinishValue = (observer) => {
+                observer.OnNext(finishValue);
+                return null;
+            };
+            IObservable<T> stream = Observable.Empty<TweenInformation<T>>()
+                // Repeat() のために、毎回初期値を生成
+                .StartWith(() => new TweenInformation<T>(Time.time, start(), finish(), duration, easeType, out startValue, out finishValue))
                 // Update のストリームに変換
-                .SelectMany(startTime => Observable.EveryUpdate().Select(_ => Time.time - startTime))
+                .SelectMany(information => Observable.EveryUpdate().Do(_ => information.Time = Time.time - information.StartTime).Select(_ => information))
                 // Tween 時間が処理時間よりも小さい間流し続ける
-                .TakeWhile(time => time <= duration)
+                .TakeWhile(information => information.Time <= duration)
                 // 実際の Easing 処理実行
-                .Select(time => Easing(time, start, (finish - start), duration, easeType).Value)
+                .Select(information => Easing(information.Time, information.Start, (information.Finish - information.Start), information.Duration, information.EaseType).Value)
                 // 最終フレームの値を確実に流すために OnCompleted が来たら値を一つ流すストリームに繋ぐ
-                .Concat(Observable.Return(finish.Value).Take(1));
+                .Concat(Observable.Create(returnFinishValue).Take(1));
             switch (loopType) {
                 case LoopType.None:
                     // Do nothing.
@@ -131,34 +174,34 @@ namespace UniRx {
                 case LoopType.PingPong:
                     stream = stream
                         .Concat(
-                            Observable.Empty<float>()
-                                // Repeat() のために、毎回初期時刻を生成
-                                .StartWith(() => Time.time)
+                            Observable.Empty<TweenInformation<T>>()
+                                // Repeat() のために、毎回初期値を生成
+                                .StartWith(() => new TweenInformation<T>(Time.time, start(), finish(), duration, easeType, out startValue, out finishValue))
                                 // Update のストリームに変換
-                                .SelectMany(startTime => Observable.EveryUpdate().Select(_ => Time.time - startTime))
+                                .SelectMany(information => Observable.EveryUpdate().Do(_ => information.Time = Time.time - information.StartTime).Select(_ => information))
                                 // Tween 時間が処理時間よりも小さい間流し続ける
-                                .TakeWhile(time => time <= duration)
+                                .TakeWhile(information => information.Time <= duration)
                                 // start と finish を入れ替えて、実際の Easing 処理実行
-                                .Select(time => Easing(time, finish, (start - finish), duration, easeType).Value)
+                                .Select(information => Easing(information.Time, information.Finish, (information.Start - information.Finish), information.Duration, information.EaseType).Value)
                                 // 最終フレームの値を確実に流すために OnCompleted が来たら最終値を一つ流すストリームに繋ぐ
-                                .Concat(Observable.Return(start.Value).Take(1))
+                                .Concat(Observable.Create(returnStartValue).Take(1))
                         )
                         .Repeat();
                     break;
                 case LoopType.Mirror:
                     stream = stream
                         .Concat(
-                            Observable.Empty<float>()
-                                // Repeat() のために、毎回初期時刻を生成
-                                .StartWith(() => Time.time)
+                            Observable.Empty<TweenInformation<T>>()
+                                // Repeat() のために、毎回初期値を生成
+                                .StartWith(() => new TweenInformation<T>(Time.time, start(), finish(), duration, easeType, out startValue, out finishValue))
                                 // Update のストリームに変換
-                                .SelectMany(startTime => Observable.EveryUpdate().Select(_ => Time.time - startTime))
+                                .SelectMany(information => Observable.EveryUpdate().Do(_ => information.Time = Time.time - information.StartTime).Select(_ => information))
                                 // Tween 時間が処理時間よりも小さい間流し続ける
-                                .TakeWhile(time => time <= duration)
+                                .TakeWhile(information => information.Time <= duration)
                                 // start と finish を入れ替えて、実際の Easing 処理実行
-                                .Select(time => Easing(time, finish, (start - finish), duration, MIRROR_EASE_TYPE_MAP[easeType]).Value)
+                                .Select(information => Easing(information.Time, information.Finish, (information.Start - information.Finish), information.Duration, MIRROR_EASE_TYPE_MAP[information.EaseType]).Value)
                                 // 最終フレームの値を確実に流すために OnCompleted が来たら最終値を一つ流すストリームに繋ぐ
-                                .Concat(Observable.Return(start.Value).Take(1))
+                                .Concat(Observable.Create(returnStartValue).Take(1))
                         )
                         .Repeat();
                     break;
@@ -168,7 +211,7 @@ namespace UniRx {
 
         private static OperatableBase<T> Easing<T>(float time, OperatableBase<T> initial, OperatableBase<T> delta, float duration, EaseType easeType) where T : struct {
             if (!EasingFunctions<T>.EASING_FUNCTION_MAP.ContainsKey(easeType)) {
-                throw new System.ArgumentException(string.Format("EaseType: '{0}' does not implement yet.", easeType.ToString()));
+                throw new ArgumentException(string.Format("EaseType: '{0}' does not implement yet.", easeType.ToString()));
             }
             if (time <= 0.0f) {
                 return initial;
@@ -183,7 +226,7 @@ namespace UniRx {
 
             private const float EASE_BACK_THRESHOLD = 1.70158f;
 
-            public static readonly Dictionary<EaseType, System.Func<float, OperatableBase<T>, OperatableBase<T>, float, OperatableBase<T>>> EASING_FUNCTION_MAP = new Dictionary<EaseType, System.Func<float, OperatableBase<T>, OperatableBase<T>, float, OperatableBase<T>>>() {
+            public static readonly Dictionary<EaseType, Func<float, OperatableBase<T>, OperatableBase<T>, float, OperatableBase<T>>> EASING_FUNCTION_MAP = new Dictionary<EaseType, Func<float, OperatableBase<T>, OperatableBase<T>, float, OperatableBase<T>>>() {
                 { EaseType.Linear, EaseLinear },
                 { EaseType.InQuadratic, EaseInQuadratic },
                 { EaseType.OutQuadratic, EaseOutQuadratic },
