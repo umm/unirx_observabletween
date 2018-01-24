@@ -102,10 +102,18 @@ namespace UniRx {
         };
 
         public static IObservable<T> Tween<T>(T start, T finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
+            return Tween(() => start, () => finish, () => duration, easeType, loopType);
+        }
+
+        public static IObservable<T> Tween<T>(T start, T finish, Func<float> duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
             return Tween(() => start, () => finish, duration, easeType, loopType);
         }
 
         public static IObservable<T> Tween<T>(Func<T> start, Func<T> finish, float duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
+            return Tween(start, finish, () => duration, easeType, loopType);
+        }
+
+        public static IObservable<T> Tween<T>(Func<T> start, Func<T> finish, Func<float> duration, EaseType easeType, LoopType loopType = LoopType.None) where T : struct {
             return Tween(
                 () => Activator.CreateInstance(OPERATABLE_STRUCT_MAP[typeof(T)], start()) as OperatableBase<T>,
                 () => Activator.CreateInstance(OPERATABLE_STRUCT_MAP[typeof(T)], finish()) as OperatableBase<T>,
@@ -142,7 +150,7 @@ namespace UniRx {
 
         }
 
-        private static IObservable<T> Tween<T>(Func<OperatableBase<T>> start, Func<OperatableBase<T>> finish, float duration, EaseType easeType, LoopType loopType) where T : struct {
+        private static IObservable<T> Tween<T>(Func<OperatableBase<T>> start, Func<OperatableBase<T>> finish, Func<float> duration, EaseType easeType, LoopType loopType) where T : struct {
             T startValue = default(T);
             T finishValue = default(T);
             Func<IObserver<T>, IDisposable> returnStartValue = (observer) => {
@@ -155,11 +163,11 @@ namespace UniRx {
             };
             IObservable<T> stream = Observable.Empty<TweenInformation<T>>()
                 // Repeat() のために、毎回初期値を生成
-                .StartWith(() => new TweenInformation<T>(Time.time, start(), finish(), duration, easeType, out startValue, out finishValue))
+                .StartWith(() => new TweenInformation<T>(Time.time, start(), finish(), duration(), easeType, out startValue, out finishValue))
                 // Update のストリームに変換
                 .SelectMany(information => Observable.EveryUpdate().Do(_ => information.Time = Time.time - information.StartTime).Select(_ => information))
                 // Tween 時間が処理時間よりも小さい間流し続ける
-                .TakeWhile(information => information.Time <= duration)
+                .TakeWhile(information => information.Time <= information.Duration)
                 // 実際の Easing 処理実行
                 .Select(information => Easing(information.Time, information.Start, (information.Finish - information.Start), information.Duration, information.EaseType).Value)
                 // 最終フレームの値を確実に流すために OnCompleted が来たら値を一つ流すストリームに繋ぐ
@@ -176,11 +184,11 @@ namespace UniRx {
                         .Concat(
                             Observable.Empty<TweenInformation<T>>()
                                 // Repeat() のために、毎回初期値を生成
-                                .StartWith(() => new TweenInformation<T>(Time.time, start(), finish(), duration, easeType, out startValue, out finishValue))
+                                .StartWith(() => new TweenInformation<T>(Time.time, start(), finish(), duration(), easeType, out startValue, out finishValue))
                                 // Update のストリームに変換
                                 .SelectMany(information => Observable.EveryUpdate().Do(_ => information.Time = Time.time - information.StartTime).Select(_ => information))
                                 // Tween 時間が処理時間よりも小さい間流し続ける
-                                .TakeWhile(information => information.Time <= duration)
+                                .TakeWhile(information => information.Time <= information.Duration)
                                 // start と finish を入れ替えて、実際の Easing 処理実行
                                 .Select(information => Easing(information.Time, information.Finish, (information.Start - information.Finish), information.Duration, information.EaseType).Value)
                                 // 最終フレームの値を確実に流すために OnCompleted が来たら最終値を一つ流すストリームに繋ぐ
@@ -193,11 +201,11 @@ namespace UniRx {
                         .Concat(
                             Observable.Empty<TweenInformation<T>>()
                                 // Repeat() のために、毎回初期値を生成
-                                .StartWith(() => new TweenInformation<T>(Time.time, start(), finish(), duration, easeType, out startValue, out finishValue))
+                                .StartWith(() => new TweenInformation<T>(Time.time, start(), finish(), duration(), easeType, out startValue, out finishValue))
                                 // Update のストリームに変換
                                 .SelectMany(information => Observable.EveryUpdate().Do(_ => information.Time = Time.time - information.StartTime).Select(_ => information))
                                 // Tween 時間が処理時間よりも小さい間流し続ける
-                                .TakeWhile(information => information.Time <= duration)
+                                .TakeWhile(information => information.Time <= information.Duration)
                                 // start と finish を入れ替えて、実際の Easing 処理実行
                                 .Select(information => Easing(information.Time, information.Finish, (information.Start - information.Finish), information.Duration, MIRROR_EASE_TYPE_MAP[information.EaseType]).Value)
                                 // 最終フレームの値を確実に流すために OnCompleted が来たら最終値を一つ流すストリームに繋ぐ
