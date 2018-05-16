@@ -1,6 +1,6 @@
 {
   "name": "@umm/unirx_observabletween",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Provide UniRx wrapper for Tween",
   "homepage": "https://github.com/umm-projects/unirx_observabletween",
   "bugs": {
