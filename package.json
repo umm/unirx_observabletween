@@ -8,6 +8,7 @@
   },
   "scripts": {
     "umm:init": "umm-init",
+    "umm:generate_assembly_definition": "umm-generate_assembly_definition",
     "umm:module:install": "umm-module-install",
     "umm:module:uninstall": "umm-module-uninstall",
     "postinstall": "npm run --silent umm:module:install",
@@ -25,7 +26,7 @@
   ],
   "dependencies": {
     "@umm/scripts": "umm-projects/scripts#^1.0.0",
-    "@umm/unirx": "umm-projects/unirx#^1.0.0"
+    "@umm/unirx": "umm-projects/unirx#^2.0.0"
   },
   "devDependencies": {}
 }
