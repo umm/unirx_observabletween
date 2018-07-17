@@ -2,9 +2,9 @@
   "name": "@umm/unirx_observabletween",
   "version": "1.3.0",
   "description": "Provide UniRx wrapper for Tween",
-  "homepage": "https://github.com/umm-projects/unirx_observabletween",
+  "homepage": "https://github.com/umm/unirx_observabletween",
   "bugs": {
-    "url": "https://github.com/umm-projects/unirx_observabletween/issues"
+    "url": "https://github.com/umm/unirx_observabletween/issues"
   },
   "scripts": {
     "umm:init": "umm-init",
@@ -18,15 +18,15 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git@github.com:umm-projects/unirx_observabletween"
+    "url": "git@github.com:umm/unirx_observabletween"
   },
   "files": [
     "Assets",
     "scripts"
   ],
   "dependencies": {
-    "@umm/scripts": "umm-projects/scripts#^1.0.0",
-    "@umm/unirx": "umm-projects/unirx#^2.0.0"
+    "@umm/scripts": "umm/scripts#^1.0.0",
+    "@umm/unirx": "umm/unirx#^2.0.0"
   },
   "devDependencies": {}
 }

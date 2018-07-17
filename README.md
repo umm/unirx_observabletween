@@ -9,7 +9,7 @@
 # Install
 
 ```shell
-$ npm install github:umm-projects/unirx_observabletween
+$ npm install github:umm/unirx_observabletween
 ```
 
 # Usage
