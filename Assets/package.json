@@ -1,0 +1,22 @@
+{
+  "name": "dev.upm-packages.unirx-observabletween",
+  "displayName": "UniRx ObservableTween",
+  "version": "1.4.0",
+  "unity": "2019.3",
+  "description": "Provide UniRx wrapper for Tween",
+  "homepage": "https://github.com/umm/unirx_observabletween",
+  "bugs": {
+    "url": "https://github.com/umm/unirx_observabletween/issues"
+  },
+  "author": "Tetsuya Mori",
+  "license": "MIT",
+  "keywords": [],
+  "category": "",
+  "dependencies": {
+    "jp.cysharp.unirx": "7.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/umm/unirx_observabletween"
+  }
+}
